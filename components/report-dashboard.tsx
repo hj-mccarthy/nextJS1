@@ -1,116 +1,89 @@
-"use client"
+// /components/report-dashboard.tsx
+"use client";
 
-import { useState, useEffect } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import ReportDetails from "@/components/report-details"
-import EmployeeMappings from "@/components/employee-mappings"
-import IncompleteMappings from "@/components/incomplete-mappings"
-import { fetchReports, fetchMatchingEmployees, fetchIncompleteMappings } from "@/lib/data"
-import type { Report, Employee } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ReportDetails from "@/components/report-details";
+import EmployeeMappings from "@/components/employee-mappings";
+import IncompleteMappings from "@/components/incomplete-mappings";
+import { fetchMatchingEmployees } from "@/lib/data";
+import type { Report, Employee, EmployeeWithMappings } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
-// Define a type for employees with mapping counts
-export type EmployeeWithMappings = Employee & { reportCount: number }
+interface ReportDashboardProps {
+  initialReports: Report[];
+  initialIncompleteMappings: EmployeeWithMappings[];
+}
 
-export default function ReportDashboard() {
-  const [reports, setReports] = useState<Report[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
-  // Update the state type for incompleteMappings
-  const [incompleteMappings, setIncompleteMappings] = useState<EmployeeWithMappings[]>([])
-  const [selectedRegion, setSelectedRegion] = useState<string>("all")
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null)
-  const [filteredReports, setFilteredReports] = useState<Report[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("reports")
+export default function ReportDashboard({ initialReports, initialIncompleteMappings }: ReportDashboardProps) {
+  const [reports] = useState<Report[]>(initialReports);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string>("all");
+  const [selectedReport, setSelectedReport] = useState<Report | null>(initialReports[0] || null);
+  const [filteredReports, setFilteredReports] = useState<Report[]>(initialReports);
+  const [activeTab, setActiveTab] = useState<"reports" | "incomplete">("reports");
 
-  // Fetch initial data
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true)
-      try {
-        const [reportsData, incompleteMappingsData] = await Promise.all([fetchReports(), fetchIncompleteMappings()])
-
-        setReports(reportsData)
-        setFilteredReports(reportsData)
-        setIncompleteMappings(incompleteMappingsData as EmployeeWithMappings[])
-
-        // Set default selected report if available
-        if (reportsData.length > 0) {
-          setSelectedReport(reportsData[0])
-        }
-      } catch (error) {
-        console.error("Failed to load data:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadData()
-  }, [])
-
-  // Add a new useEffect to fetch employees when a report is selected
   useEffect(() => {
     if (selectedReport) {
       const loadEmployees = async () => {
         try {
-          const matchedEmployees = await fetchMatchingEmployees(selectedReport.name)
-          setEmployees(matchedEmployees)
+          const matchedEmployees = await fetchMatchingEmployees(selectedReport.name);
+          setEmployees(matchedEmployees);
         } catch (error) {
-          console.error("Failed to load employees:", error)
+          console.error("Failed to load employees:", error);
         }
-      }
-
-      loadEmployees()
+      };
+      loadEmployees();
     }
-  }, [selectedReport])
+  }, [selectedReport]);
 
-  // Filter reports when region changes
   useEffect(() => {
-    if (selectedRegion === "all") {
-      setFilteredReports(reports)
+    const newFilteredReports =
+      selectedRegion === "all"
+        ? reports
+        : reports.filter((report) => report.region === selectedRegion);
+
+    setFilteredReports(newFilteredReports);
+
+    if (newFilteredReports.length > 0) {
+      if (
+        !selectedReport ||
+        !newFilteredReports.some((report) => report.id === selectedReport.id)
+      ) {
+        setSelectedReport(newFilteredReports[0]);
+      }
     } else {
-      setFilteredReports(reports.filter((report) => report.region === selectedRegion))
+      setSelectedReport(null);
     }
+  }, [selectedRegion, reports]);
 
-    // Update selected report if needed
-    if (
-      filteredReports.length > 0 &&
-      (!selectedReport || (selectedRegion !== "all" && selectedReport.region !== selectedRegion))
-    ) {
-      setSelectedReport(filteredReports[0])
-    }
-  }, [selectedRegion, reports, selectedReport, filteredReports])
-
-  // Handle region selection
   const handleRegionChange = (value: string) => {
-    setSelectedRegion(value)
-  }
+    setSelectedRegion(value);
+  };
 
-  // Handle report selection
   const handleReportChange = (value: string) => {
-    const report = reports.find((r) => r.id === value)
+    const report = reports.find((r) => r.id === value);
     if (report) {
-      setSelectedReport(report)
+      setSelectedReport(report);
     }
-  }
-
-  if (isLoading) {
-    return <div className="flex justify-center p-8">Loading report data...</div>
-  }
+  };
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+    <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "reports" | "incomplete")} className="space-y-6">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="reports">Reports</TabsTrigger>
-        <TabsTrigger value="incomplete">
-          Incomplete Mappings
-          {incompleteMappings.length > 0 && (
-            <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-800">
-              {incompleteMappings.length}
-            </Badge>
-          )}
+        <TabsTrigger value="incomplete" asChild>
+          <Link href="/dashboard/incomplete">
+            Incomplete Mappings
+            {initialIncompleteMappings.length > 0 && (
+              <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-800">
+                {initialIncompleteMappings.length}
+              </Badge>
+            )}
+          </Link>
         </TabsTrigger>
       </TabsList>
 
@@ -200,13 +173,12 @@ export default function ReportDashboard() {
               <p className="text-sm text-muted-foreground">Showing employees mapped to fewer than 2 reports</p>
             </div>
             <Badge variant="secondary" className="text-base">
-              Total: {incompleteMappings.length}
+              Total: {initialIncompleteMappings.length}
             </Badge>
           </div>
-          <IncompleteMappings employees={incompleteMappings} reports={reports} />
+          <IncompleteMappings employees={initialIncompleteMappings} reports={reports} />
         </div>
       </TabsContent>
     </Tabs>
-  )
+  );
 }
-
